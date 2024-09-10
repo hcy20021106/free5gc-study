@@ -108,3 +108,72 @@ udptunnel is used to encapsulate UDP packets within TCP packets and then transmi
 - Virtual Network Interface
 - Loopback Interface
 - VPN Interface
+
+# tun/tap
+## definition
+tun is L3(network) device, while tap is L2(data link) device. Its function is same with hardware device. 
+## Driver
+- 字符驱动设备(模拟物理链路的数据接收与发送)
+- 网卡驱动
+    - 1. 应用程序发起网络请求
+    - 2. 进入协议栈后经过路由查询应该走虚拟网卡
+    - 3. 数据进入虚拟网卡，处理后发送给应用层程序
+    - 4. 数据从程序再次进入协议栈，重新路由到真实网卡
+    - 5. 通过真实网卡再把数据发送出去。
+## create tun
+```bash
+
+int tun_create(char *dev, int flags){
+    struct ifreq ifr;
+    int fd, err;
+    if((fd = open("/dev/net/tun", O_RDWR)) < 0 ){
+        return fd;
+    }
+    memset(&ifr, 0, sizeof(ifr));
+    ifr.ifr_flags = flags;
+    if(*dev)
+    strncpy(ifr.ifr_name, dev, IFNAMSIZ);
+ if ((err = ioctl(fd, TUNSETIFF, (void *)&ifr)) < 0) {
+  perror("ioctl(TUNSETIFF)");
+  close(fd);
+  return err;
+ }
+ strcpy(dev, ifr.ifr_name);
+ return fd; 
+}
+int main(int argc, char *argv[])
+{
+ char buffer[BUFSIZ], veth_name[IFNAMSIZ] = "tunveth1";
+ int i, tun_fd, nread;
+ struct ethhdr *eth;
+ struct iphdr *iph;
+ struct in_addr saddr, daddr; 
+ tun_fd = tun_create(veth_name, IFF_TUN | IFF_NO_PI);
+ if (tun_fd < 0) {
+  perror("Creating interface");
+  exit(1);
+ }
+ while(1) {
+  memset(buffer, 0, sizeof(buffer));
+  nread = read(tun_fd, buffer, sizeof(buffer));
+  if (nread < 0) {
+   perror("Reading from interface");
+   close(tun_fd);
+   exit(1);
+  }
+  iph = (struct iphdr*)buffer;
+
+  if (iph->version ==4) {  
+   printf("\nRead %d bytes from device %s\n", nread, veth_name);
+   memcpy(&saddr.s_addr, &iph->saddr, 4);
+   memcpy(&daddr.s_addr, &iph->daddr, 4);
+   printf("Source host:%s\n", inet_ntoa(saddr));
+   printf("Dest host:%s\n", inet_ntoa(daddr));
+  }
+ }
+ return 0;
+}
+
+
+
+```

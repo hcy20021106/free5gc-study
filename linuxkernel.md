@@ -478,6 +478,9 @@ int main() {
 
 ```
 
+
+
+
 ## register my_ioctl
 ```bash
 
@@ -513,6 +516,76 @@ module_init(my_module_init);
 
 
 ```
+## ioctl && ifreq
+To be simple, ifreq is like a intermediate data to be called by ioctl to configure network devices. 
+### ifreq
+```bash
+struct ifreq{
+    chr ifr_name[IFNAMSIZ];
+    union{
+        struct sockaddr ifr_addr;
+        //只针对点对点连接的目标地址
+        struct sockaddr ifr_dstaddr;
+        struct sockaddr ifr_broadaddr;
+        ... 
+    }
+}
+
+```
+### ioctl
+use ioctl to call **SIOCGIFMTU** and so on to config the network device
+```bash
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <net/if.h>
+#include <arpa/inet.h>
+
+int main(int argc, char *argv[]) {
+    if (argc != 3) {
+        fprintf(stderr, "Usage: %s <interface> <mtu>\n", argv[0]);
+        return 1;
+    }
+
+    const char *interface = argv[1];
+    int new_mtu = atoi(argv[2]);
+
+    if (new_mtu <= 0) {
+        fprintf(stderr, "Invalid MTU value\n");
+        return 1;
+    }
+
+    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sockfd < 0) {
+        perror("socket");
+        return 1;
+    }
+
+    struct ifreq ifr;
+    memset(&ifr, 0, sizeof(ifr));
+    strncpy(ifr.ifr_name, interface, IFNAMSIZ - 1);
+    ifr.ifr_mtu = new_mtu;
+
+    if (ioctl(sockfd, SIOCSIFMTU, &ifr) < 0) {
+        perror("ioctl");
+        close(sockfd);
+        return 1;
+    }
+
+    printf("MTU for interface %s set to %d\n", interface, new_mtu);
+
+    close(sockfd);
+    return 0;
+}
+
+
+
+```
 
 ## **/proc** interface
 ### file_operations 
@@ -540,6 +613,64 @@ proc_file = proc_create(PROC_NAME, 0, NULL, &gtp5g_proc_fops);
 
 
 ## Socket
+### socket
+
+```bash
+int socket(int domain, int type, int protocol);
+
+```
+domain: AF_INET, AF_INET6, AF_UNIX(processes in localhost)
+type: SOCK_STREAM, SOCK_DRGAM, SOCK_RAW
+protocol: normally 0
+
+### sockaddr
+It consists of address family(ipv4/ipv6) and address
+```bash
+struct sockaddr{
+    sa_family_t sa_family;
+    char    sa_data[];
+}
+
+```
+### in_addr
+```bash
+struct in_addr {
+  union {
+    struct {
+      u_char s_b1;
+      u_char s_b2;
+      u_char s_b3;
+      u_char s_b4;
+    } S_un_b;
+    struct {
+      u_short s_w1;
+      u_short s_w2;
+    } S_un_w;
+    u_long S_addr;
+  } S_un;
+};
+```
+例in_addr = 192.168.1.1
+- S_un
+    - S_un_b.s_b1 = "192"
+    - S_un_b.s_b2 = "168"
+    - S_un_b.s_b3 = "1"
+    - S_un_b.s_b4 = "1"
+- S_un_w
+    - S_un_w.s_w1 = 192.168
+    - S_un_w.s_w2 = 1.1
+- S_addr = 192168001001
+### sockaddr_in
+It extend sockaddr with port
+```bash
+struct sockaddr_in{
+sa_family_t sin_family;
+in_port_t   sin_port;
+struct in_addr  sin_addrs;
+
+}
+
+```
 ### sendto
 ```bash
 int sock_fd
@@ -610,24 +741,24 @@ int dev_queue_xmit(struct sk_buff *skb){
     txq = dev_pick_tx(dev, skb);
     //从netdev_queue结构上获取设备的qdisc（队列调度器）
     q = rcu_dereference_bh(txq->qdisc);
+    if(q->enqueue){
+        rc = __dev_xmit_skb(skb, q, dev, txq);
+        goto out;
+    }
     ...
     rcu_read_unlock_bh();
-}
-static struct netdev_queue *dev_pick_tx(struct net_device *dev, struct sk_buff *skb){
-    int queue_index;
-    const struct netdevice_ops *ops = dev->netdev_ops;
-    if(ops->ndo_select_queue){
-        queue_index = ops->ndo_select_queue(dev,skb);
-        queue_index = dev_cap_txqueue(dev, queue_index);
-        
-    }
-
-
-
 }
 
 
 ```
+txq->qdisc是一个调度器，也可以称为**排队规则**（FIFO），倘若有enqueue规则话就会直接进入到拥塞的flow中。
+> 不管有没有拥堵，最后的数据包都是通过**dev_hard_start_xmit**发送的
+如果满足一下则不用enqueue，而是直接通过sch_direct_xmit来发送
+- q->flags是TCQ_F_CAN_BYPASS，这个默认条件是可以的
+- qlen即队列长度为0，那么当前的skb理应是第一个skb
+- qdisc本来是非running的状态，现在成功置位Running
+如果拥塞的话一般来说是qlen！=0，则进行enqueue操作，然后调用dev_hard_start_xmit来循环发送skb，这里有用到xmit_one函数，其嵌套了好几层函数。
+xmit_one -> netdev_start_xmit -> __netdev_start_xmit -> ops->ndo_start_xmit
 
 > **Notice**<br>
 > In Linux, the kernel typically does not have direct access to packets stored in a **device's queue** due to security layers that prevent unauthorized access. When a device receives a packet, it is stored in a queue until the driver processes it. The kernel accesses packet information **only through the driver layer**, which provides interfaces for packet retrieval.<br>

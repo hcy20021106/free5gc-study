@@ -19,12 +19,28 @@ int *value;
 value = (int *)NLA_DATA(na);
 ```
 
+# strcpy
+char * strcpy(char *destination, const char *source)
+
+# strncpy
+char *strncpy(char *destination, const char *source, size_t num)
+> const char可以保证不被修改
+
 # memcpy
 void* memcpy(void* dest, const void* src, std::size_t count)
 ```bash
 char source[] = "once upon a daydream...", dest[4];
 std::memcpy(dest, source, sizeof dest);
 ```
+
+# memset
+void *memset(void *ptr, int value, size_t num)
+```bash
+size_t num_elements = 10;
+int *buffer = malloc(num_elements * sizeof(int));
+
+```
+
 
 # void*
 void* is a pointer to point a uncertain type. 不能直接对void*指针进行解引用操作，必须先将其转换为具体类型的指针
@@ -43,3 +59,29 @@ server_addr = malloc(sizeof(struct sockaddr_in));
 struct sockaddr_in *addr = (struct sockaddr_in *) server_addr;
 
 ```
+# int main(int argc, char *argv[])
+```bash
+int main(int argc, char *argv[]){
+    if(argc !=3 ){
+        fprintf(stderr, "")
+        return 1;
+    }
+}
+```
+```bash
+gcc -o set_mtu set_mtu.c
+sudo ./set_mtu eth0 1500
+```
+# read
+ssize_t read(int fd, void buf[.count], size_t count);
+
+# fd
+socket(), open()的返回值都是fd，本质是int，用于描述文件
+
+# 对齐（强制转换的基础）
+- 内存对齐：通常指大小一样。
+```bash
+char buffer[sizeof(struct iphdr)];
+```
+- 数据布局对齐
+例如填充buffer时需要确保字段按正常的顺序和格式进行填充
