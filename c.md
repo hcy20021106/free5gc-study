@@ -33,7 +33,7 @@ char source[] = "once upon a daydream...", dest[4];
 std::memcpy(dest, source, sizeof dest);
 ```
 
-# memset
+# malloc
 void *memset(void *ptr, int value, size_t num)
 ```bash
 size_t num_elements = 10;
@@ -85,3 +85,6 @@ char buffer[sizeof(struct iphdr)];
 ```
 - 数据布局对齐
 例如填充buffer时需要确保字段按正常的顺序和格式进行填充
+
+# __init && __exit
+__init和__exit是宏，标记函数分别在模块初始化和模块卸载时被调用

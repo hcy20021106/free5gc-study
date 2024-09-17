@@ -25,4 +25,12 @@ sysctl -w net.ipv4.ip_forward = 1
 
 ```
 
-
+# kernel
+```bash
+\\查看当前内核加载的模块信息
+lsmod 
+\\modinfo + 模块名
+modinfo hello
+\\rmmod + 模块名
+rmmod hello
+```

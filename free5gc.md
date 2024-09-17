@@ -1,3 +1,24 @@
+# AMF
+## Introduction
+AMF plays a critical role in managing User Equipment(UE) registration, connectivity, reachability and mobility. It interact with other network functions(NF) such as **UDM**, **SMF** and **AUSF**
+<img src="image/8.png" alt="Description of the image" height="400">
+
+## UE context
+UE context refers to a collection of data maintained by the AMF about a specific UE. This data is essential for managing the UE's connection to the network. **Namf_Communication** service enables an NF to communicate with the UE through **AN**(RAN, Radio Access Network, in 5G it is usually called gNB)
+## Call Flow
+- First is a registration process. gNB sends registration requests along with an initial UE message to RAN, which sends request to AMF. 这种request叫做（R）AN message，其包括registration type，SUCI，Last visited TAI， Requested NSSAI等信息。Then it checks for the last AMF with which the UE is registered, and if it succeeds to find the old AMF address, the new AMF requests for the UE context procedure.
+- AMF authenticates UE and at the same time the network initiates the deregistration process against the old AMF. And it also retrieves all the subscriber-related data from **UDM** and session-related subscriber data from SMF.
+- Finally it creates UE context. It allocates UE with an id known as AMF UE NGAP ID to identify it from a pool of UEs. And then registration confirmation message with an initial context setup message is sent.
+## Authorization && Authentication
+这个过程由**call ausf**而引发
+AMF initiates authorization and authentication procedure with the UE. And then AUSF handles the authentication-related parameters. AMF builds protected NAS UL and DL transport channels before any type of communication between UE, gNB, and AMF.
+<img src="image/9.png" alt="Description of the image" height="400">
+## PDU Session Establishment/Modification
+PDU Session modification request is sent by SMF to UPF. And then AMF accordingly updates the UE context and passes the updated parameters and information to the gNB and UE to reconfigure its base.
+<img src="image/10.png" alt="Description of the image" height="400">
+
+
+
 # UPF
 ## Introduction
 UPF plays a crucial role in data transfer within the 5G network. It is interconnected with the **Data Network(DN)** in the 5G architecture. As a primary network function(NF) of the 5G core network(5GC), it handles the most critical aspects of data processing. 
