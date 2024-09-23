@@ -40,7 +40,12 @@ size_t num_elements = 10;
 int *buffer = malloc(num_elements * sizeof(int));
 
 ```
+# calloc
+void *calloc(size_t num, size_t size);
+```bash
+int* arr = (int*) calloc(10, sizeof(int)); // 分配并初始化为 0 的 10 个整数的内存
 
+```
 
 # void*
 void* is a pointer to point a uncertain type. 不能直接对void*指针进行解引用操作，必须先将其转换为具体类型的指针

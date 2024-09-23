@@ -480,6 +480,66 @@ int main() {
 
 
 
+## 根据自己定义的结构体发送message
+以发送pdi消息为例
+```bash
+// define pdi struct
+typedef struct {
+    uint8_t sourceInterface;
+    uint32_t localField;
+    char networkInstance[16];
+    char ueIPAddressp16;
+}
+void serializePDI(const PDI *pdi, uint8_y *buffer, size_T *size){
+    size_t offset = 0;
+    buffer[offset++] = pdi->sourceInterface;
+    // 序列化 Local F-TEID
+    memcpy(buffer + offset, &pdi->localField, sizeof(pdi->localField);
+    // 序列化 Network Instance
+    memcpy(buffer + offset, pdi->networkInstance, sizeof(pdi->networkInstance));
+    offset += sizeof(pdi->networkInstance);
+    
+    // 序列化 UE IP Address
+    memcpy(buffer + offset, pdi->ueIPAddress, sizeof(pdi->ueIPAddress));
+    offset += sizeof(pdi->ueIPAddress);
+    
+    *size = offset;
+    )
+}
+
+// 发送message
+void sendPDIMessage(const char *ip, uint16_t port, const PDI *pdi){
+    int sockfd;
+    struct sockaddr_in server_addr;
+    uint8_t bufferp[256];
+    size_t buffer_size;
+    // 创建套接字
+    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sockfd < 0) {
+        perror("Socket creation failed");
+        return;
+    }
+
+    // 填充目标地址
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(port);
+    if (inet_pton(AF_INET, ip, &server_addr.sin_addr) <= 0) {
+        perror("Invalid address");
+        close(sockfd);
+        return;
+    }
+
+    // 序列化 PDI 消息
+    serializePDI(pdi, buffer, &buffer_size);
+
+    // 发送消息
+    if (sendto(sockfd, buffer, buffer_size, 0, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Send failed");
+    }
+
+}
+```
 
 ## register my_ioctl
 ```bash

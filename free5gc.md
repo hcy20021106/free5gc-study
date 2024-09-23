@@ -13,21 +13,32 @@ UE context refers to a collection of data maintained by the AMF about a specific
 这个过程由**call ausf**而引发
 AMF initiates authorization and authentication procedure with the UE. And then AUSF handles the authentication-related parameters. AMF builds protected NAS UL and DL transport channels before any type of communication between UE, gNB, and AMF.
 <img src="image/9.png" alt="Description of the image" height="400">
+
 ## PDU Session Establishment/Modification
 PDU Session modification request is sent by SMF to UPF. And then AMF accordingly updates the UE context and passes the updated parameters and information to the gNB and UE to reconfigure its base.
 <img src="image/10.png" alt="Description of the image" height="400">
 
+## Registration with AMF Re-allocation
+When an AMF receives a registration request, it may **reroute** the request to another AMF beacuse of many reasons. The registration with AMF re-allocation procedure is used to reroute the **NAS message** of the UE to the target AMF during the registration procedure.
+<img src="image/11.png" alt="Description of the image" height="400">
+
+## Inter NG RAN Node N2-based Handover
+Due to the relocation of UE, along withthe change in the serving RAN. So the **serving AMF** should select the appropriate AMF(target AMF) to serve the UE in that region. 
+And then the **target AMF** sends a handover request to the **target RAN**
+<img src="image/12.png" alt="Description of the image" height="400">
+
+## Configuration Update
+AMF decides whether UE needs reconfiguration or it should re-register with the AMF again. 
+<img src="image/13.png" alt="Description of the image" height="400">
 
 
 # UPF
 ## Introduction
 UPF plays a crucial role in data transfer within the 5G network. It is interconnected with the **Data Network(DN)** in the 5G architecture. As a primary network function(NF) of the 5G core network(5GC), it handles the most critical aspects of data processing. 
 ## Function
-- packet routing and forwarding
-- packet inspections
-- quality of service(QoS) handling
-- anchor point for intra & inter-RAT mobility
-
+- Based on N3 to connect with RAN using gtp-tunnel
+- Based on N4 to connect with SMF using PFCP protocol
+- Baesd on N6 to connect with DN
 ## Codebase run
 
 - Data Plane Forwarder for GTP-U: This procsee establishes a data path for forwarding user data packets between the UPF and the UE via GTP-U protocol
@@ -46,6 +57,19 @@ The free5GC implements UPF in two parts
 
 **GTP** 
 GTP(General Packet Radio System Tunneling Protocol) is a group of IP-based communication protocols used to transport General Packet Radio Services(GPRS) within LTE, 5G NR, and other networks. GTP can be broken down into 3 components: GTP-C(Control plane), GTP-U(User plane) and GTP prime.
+GTP Header
+<img src="image/17.png" alt="Description of the image" height="400">
+
+GTP是一种用于隧道化数据包的协议。它主要用于移动通信网络中，将用户数据和控制信息通过隧道传输。外部网络只看到封装后的数据，而不需要知道里面的具体内容。
+- GTP-C 用于信令，负责建立、维护和删除隧道
+- GTP-U 用于实际的数据传输。
+### 构建隧道的过程
+- 创建隧道，每个隧道都有TEID（隧道端点标识符）
+- 数据封装，用户数据被封装在GTP-U包中，头部保护GTP标头，TEID等信息。
+- 隧道传输，隧道跨越不同的网络设备，如基站，网关等
+- 数据解封装，网络设备通过TEDI来识别隧道并解封装数据包，恢复出原始的用户数据。
+
+
 
 ---
 
@@ -157,6 +181,24 @@ It is divided two parts, gtp in UPF and gtp5g, they are golang language in UPF a
                 .flags = GENL_ADMIN_PERM,
             }
         }
+
+        ```
+        - example
+        ```bash
+        //instance my_family
+        #define MY_FAMILY_NAME "my_family"
+        static struct genl_family my_family = {
+            .name = MY_FAMILY_NAME,
+            .version = 1,
+            .hdrize = 0,
+            .maxattr = 0,
+
+
+        };
+        //register my_family
+        ret = genl_register_family($)
+
+
 
         ```
         
@@ -273,9 +315,45 @@ It is divided two parts, gtp in UPF and gtp5g, they are golang language in UPF a
 
         ```
         
-## PFCP
-PFCP empowers SMFs to Setup associations with UPFs, essnentially creating control paths for directin user data traffic. Following association, SMF leverage PFCP to configure Packet Data Unit(PDU) sessions within the UPF. This PDU sessions dictate how user data should be processed and forwarded across the network.
-<img src="image/3.png" alt="Description of the image" height="400">
+## PFCP 
+PFCP works in N4 between SMF and UPF. It empowers SMFs to Setup associations with UPFs, essnentially creating control paths for directin user data traffic. Following association, SMF leverage PFCP to configure Packet Data Unit(PDU) sessions within the UPF. This PDU sessions dictate how user data should be processed and forwarded across the network.
+<img src="image/14.png" alt="Description of the image" height="400">
+
+### PFCP protocol
+#### Stack
+The PFCP protocol runs on top of UDP/IP. The UDP destination port for a request message uses **port 8805**, which is the registered port number of the PFCP protocol
+#### PFCP message
+- PFCP header
+    - Message Type
+    - Message Length
+    - Sequence Number
+- PFCP Information Elements
+#### PFCP Session Establishment Request(One type of Message type)
+- Create/Modify/Delete  PDR
+- Create/Modify/Delete  FAR
+- Create/Modify/Delete  URR
+- Create/Modify/Delete  QER
+    - GBR(Guaranteed Bit Rate)
+    - MBR(Maximum Bit Rate)
+    - DRB(Data Rate Burst)
+    - DSCP(优先级)
+- Create/Modify/Delete  BAR
+```bash
+int gtp5g_mod_pdr(int genl_id, struct mnl_socket *nl, struct gtp5g_dev *dev, struct gtp5g_pdr *pdr){
+    struct nlmsghdr *nlh;
+    char buf[MNL_SOCKET_BUFFER_SIZE];
+    uint32_t seq = time(NULL);
+    nlh = genl_nlmsg_build_hdr(buf, genl_id,  NLM_F_REPLACE | NLM_F_ACK, ++seq,
+                               GTP5G_CMD_ADD_PDR);
+    gtp5g_build_pdr_payload(nlh, dev, pdr);
+    genl_socket_talk(nl, nlh, seq, NULL, NULL)
+
+
+}
+
+```
+
+
 
 ### Association Setup
 - PFCP server initialization
@@ -351,14 +429,7 @@ User space program could read and alter kernel's routing table or create new net
 > - **genl_register_family(&my_genl_family)**
 > 
 ```bash
-    static struct genl_ops my_genl_ops[] = {
-    {
-        .cmd = MY_CMD_HELLO,
-        .flags = 0,
-        .policy = my_genl_policy,
-        .doit = my_genl_doit,
-        .dumpit = NULL,
-    },
+    //instance genl_family
     static struct genl_family my_genl_family = {
     .name = "my_family",            // Netlink 家族名称
     .version = 1,                   // 版本号
@@ -366,7 +437,34 @@ User space program could read and alter kernel's routing table or create new net
     .ops = my_genl_ops,             // 指向 genl_ops 数组
     .n_ops = ARRAY_SIZE(my_genl_ops), // genl_ops 数量
 };
+    // create my_genl_ops
+    #define QER_CMD_CREATE 1
+    static struct genl_ops my_genl_ops[] = {
+    {
+        .cmd = QER_CMD_CREATE,
+        .flas = 0,
+        .policy = NULL,
+        .doit = my_crate_qer,
+        .dumpit = null,
+    }
+    }
+    //REGISTER
  ret = genl_register_family(&my_genl_family);
+    //use the family
+
+    //初始化NetLink套接字
+    struct nl_sock *sock = nl_socker_alloc();
+    //连接到Generic Netlink
+    genl_connect(sock)
+    //获取家族id
+    family_id = genl_ctrl_resolve(sock, MY_FAMILY_NAME);
+    genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, family_id, 0, 0, QER_CMD_CREATE, 0);
+    if (nl_send_auto(sock, msg) < 0) {
+        perror("nl_send_auto");
+        nlmsg_free(msg);
+        nl_socket_free(sock);
+        exit(EXIT_FAILURE);
+    }
 ```
 ---
 
